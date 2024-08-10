@@ -87,6 +87,39 @@ void getbattery(const char *bat, char *output, size_t output_size) {
   }
 }
 
+void get_available_mem(char *output, size_t output_size) {
+  FILE *fp;
+  char line[256];
+  unsigned long mem_available = 0;
+
+  fp = fopen("/proc/meminfo", "r");
+  if (fp == NULL) {
+    perror("Failed to open /proc/meminfo");
+    snprintf(output, output_size, "MEM: Error");
+    return;
+  }
+
+  // Read meminfo
+  while (fgets(line, sizeof(line), fp)) {
+    if (sscanf(line, "MemAvailable: %lu kB", &mem_available) == 1) {
+      break;
+    } 
+  }
+
+  fclose(fp);
+
+  if (mem_available > 0) {
+    //Format MB or GB depending on size
+    if (mem_available > 1024 * 1024) {
+      snprintf(output, output_size, "Mem: %.2f GB", mem_available / (1024.0 * 1024.0));
+    } else {
+      snprintf(output, output_size, "Mem: %.2f MB", mem_available / 1024.0);
+    }
+  } else {
+    snprintf(output, output_size, "Mem: Error");
+  }
+}
+
 void gettime(char *buffer, size_t buflen) {
   time_t s;
   struct tm *current_time;
@@ -104,19 +137,25 @@ void gettime(char *buffer, size_t buflen) {
 
 int main(void) {
   Timer battery_timer = {0, 10};
+  Timer memory_timer = {0, 10};
 
   char battery_status[64];
   char time_str[9] = "00:00:00";
   char status[256];
+  char mem_status[128];
 
   while (1) {
     if (update_check(&battery_timer)) {
       getbattery("BAT0", battery_status, sizeof(battery_status));
     }
 
+    if (update_check(&memory_timer)) {
+      get_available_mem(mem_status, sizeof(mem_status));
+    }
+
     gettime(time_str, sizeof(time_str));
 
-    snprintf(status, sizeof(status), "%s | %s", battery_status, time_str);
+    snprintf(status, sizeof(status), "%s | %s | %s", mem_status, battery_status, time_str);
 
     // Update status bar
     setstatus(status);
